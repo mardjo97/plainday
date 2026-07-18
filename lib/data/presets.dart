@@ -32,6 +32,12 @@ abstract final class ProfilePresets {
           startMinutes: 12 * 60 + 30,
           endMinutes: 13 * 60,
         ),
+        BreakWindow(
+          id: 'break-coffee',
+          label: 'Coffee',
+          startMinutes: 15 * 60,
+          endMinutes: 15 * 60 + 15,
+        ),
       ],
       reminders: [
         ProfileReminder(

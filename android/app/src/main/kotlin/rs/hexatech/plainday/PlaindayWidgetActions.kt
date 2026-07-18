@@ -40,6 +40,8 @@ object PlaindayWidgetActions {
         val message = when (host) {
             "start_day" -> startDay(flutter, home)
             "end_day" -> endDay(flutter, home)
+            "go_to_break" -> goToBreak(flutter, home)
+            "return_from_break" -> returnFromBreak(flutter, home)
             "button" -> {
                 val buttonId = uri.pathSegments.firstOrNull().orEmpty()
                 if (buttonId.isEmpty()) "Unknown action"
@@ -54,6 +56,7 @@ object PlaindayWidgetActions {
 
         bumpRevision(flutter)
         refreshWidget(context)
+        PlaindayReminderScheduler.reschedule(context.applicationContext)
         Handler(Looper.getMainLooper()).post {
             Toast.makeText(context.applicationContext, message, Toast.LENGTH_SHORT).show()
         }
@@ -120,6 +123,43 @@ object PlaindayWidgetActions {
             .apply()
         writeHomeGlance(flutter, home, profile)
         return "Day ended"
+    }
+
+    private fun goToBreak(flutter: SharedPreferences, home: SharedPreferences): String {
+        val profile = activeProfile(flutter) ?: return "No profile"
+        val buttons = profile.optJSONArray("buttons") ?: return "No actions"
+        var breakButton: JSONObject? = null
+        for (i in 0 until buttons.length()) {
+            val b = buttons.getJSONObject(i)
+            if (b.optBoolean("isBreak", false) || b.optString("activityKind") == "breakTime") {
+                if (b.optString("breakId", "").isBlank()) {
+                    breakButton = b
+                    break
+                }
+                if (breakButton == null) breakButton = b
+            }
+        }
+        if (breakButton == null) {
+            breakButton = JSONObject()
+                .put("id", "synthetic-break")
+                .put("label", "Break")
+                .put("isBreak", true)
+                .put("pausesOthers", true)
+                .put("activityKind", "breakTime")
+        }
+        // Reuse startButton — resolveBreakLabel names it from next window.
+        startButton(flutter, breakButton, profile)
+        writeHomeGlance(flutter, home, profile)
+        return "Break started"
+    }
+
+    private fun returnFromBreak(flutter: SharedPreferences, home: SharedPreferences): String {
+        val profile = activeProfile(flutter) ?: return "No profile"
+        val running = runningEntry(flutter) ?: return "Nothing running"
+        if (running.optString("kind") != "breakTime") return "Not on break"
+        endCurrentAndResume(flutter)
+        writeHomeGlance(flutter, home, profile)
+        return "Returned from break"
     }
 
     private fun toggleButton(

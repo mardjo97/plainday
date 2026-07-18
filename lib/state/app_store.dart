@@ -235,31 +235,31 @@ class AppStore extends ChangeNotifier {
     // Re-prompt exact alarms / battery if needed before scheduling.
     await notifications.requestPermission();
     await _syncSideEffects();
-    final pending = await notifications.pendingCount();
+    final pending = scheduler.lastScheduledCount;
     final intervals = scheduler.lastIntervalCount;
     final configs = scheduler.lastIntervalConfigCount;
-    final exact = await notifications.canScheduleExact();
+    final exact = await scheduler.canScheduleExactNative();
     final skip = scheduler.lastSkipReason;
     final mode = notifications.lastScheduleMode;
-    final inexact = notifications.lastUsedInexact;
+    final inexact = scheduler.lastUsedInexact;
 
     if (!exact || inexact) {
-      return 'Intervals need exact alarms. '
+      return 'Intervals need exact alarms + unrestricted battery. '
           'Open Alarms & reminders for Plainday, allow exact alarms, '
-          'then tap Refresh again. '
-          'Pending: $pending'
+          'disable battery optimization, then tap Refresh again. '
+          'Native pending: $pending'
           '${mode != null ? ' · mode: $mode' : ''}';
     }
 
     if (intervals > 0) {
-      return 'Scheduled $intervals precise interval(s) '
-          '(mode: ${mode ?? 'exact'}). Pending: $pending';
+      return 'Native AlarmManager: $intervals precise interval(s), '
+          '$pending total alarm(s).';
     }
     if (skip != null) {
-      return '$skip · configs: $configs · pending: $pending';
+      return '$skip · configs: $configs · alarms: $pending';
     }
     return 'No interval reminders scheduled. '
-        'Configs: $configs · pending: $pending';
+        'Configs: $configs · alarms: $pending';
   }
 
   Future<void> requestNotificationPermission() async {
@@ -287,7 +287,7 @@ class AppStore extends ChangeNotifier {
       case NotificationPayloads.returnFromBreak:
         await returnFromBreak();
       case NotificationPayloads.snoozeStandUp:
-        await notifications.scheduleSnoozeStandUp();
+        await scheduler.snoozeStandUpNative();
       case NotificationPayloads.standUp:
         // Open app / acknowledge — no timer change.
         break;

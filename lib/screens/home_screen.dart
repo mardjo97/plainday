@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../models/profile.dart';
 import '../state/app_store.dart';
+import '../utils/breaks.dart';
 import '../utils/format.dart';
 import 'profiles_screen.dart';
 import 'report_screen.dart';
@@ -16,6 +17,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  /// Only while a break is running — which window the user switched to.
+  /// Cleared when the break ends so the next start uses the next scheduled.
+  String? _activeBreakPickId;
+
   @override
   void initState() {
     super.initState();
@@ -23,6 +28,26 @@ class _HomeScreenState extends State<HomeScreen> {
       _handleWidgetLaunch(HomeWidget.initiallyLaunchedFromHomeWidget());
       HomeWidget.widgetClicked.listen(_onWidgetUri);
     });
+  }
+
+  /// Next upcoming / current window (never the last manual pick).
+  String? _nextBreakId(Profile profile) {
+    return nextBreakWindow(profile)?.id ??
+        (profile.breaks.isEmpty ? null : profile.breaks.first.id);
+  }
+
+  String? _breakIdMatchingLabel(Profile profile, String label) {
+    for (final b in profile.breaks) {
+      if (b.label == label) return b.id;
+    }
+    return null;
+  }
+
+  String? _breakLabelFor(Profile profile, String? breakId) {
+    for (final b in profile.breaks) {
+      if (b.id == breakId) return b.label;
+    }
+    return null;
   }
 
   void _onWidgetUri(Uri? uri) {
@@ -49,6 +74,22 @@ class _HomeScreenState extends State<HomeScreen> {
     final profile = store.activeProfile;
     final current = store.currentActivity;
     final scheme = Theme.of(context).colorScheme;
+    final onBreak = current?.kind == ActivityKind.breakTime;
+
+    // Sticky pick only applies during an active break; otherwise always next.
+    if (!onBreak && _activeBreakPickId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _activeBreakPickId = null);
+      });
+    }
+
+    final selectedBreakId = profile == null
+        ? null
+        : onBreak
+            ? (_activeBreakPickId ??
+                _breakIdMatchingLabel(profile, current!.label) ??
+                _nextBreakId(profile))
+            : _nextBreakId(profile);
 
     return Scaffold(
       appBar: AppBar(
@@ -116,6 +157,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           context.read<AppStore>().pullRemoteChanges();
                         });
+                        final onBreak =
+                            current?.kind == ActivityKind.breakTime;
+                        final canPickBreak =
+                            onBreak && profile.breaks.length >= 2;
                         return _ActiveCard(
                           current: current,
                           dayStarted: store.dayStarted,
@@ -125,6 +170,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           onEditName: current == null || !store.currentCanBeNamed
                               ? null
                               : () => _editEventName(context, current),
+                          breakWindows: canPickBreak ? profile.breaks : null,
+                          selectedBreakId: canPickBreak ? selectedBreakId : null,
+                          onSelectBreak: !canPickBreak
+                              ? null
+                              : (id) async {
+                                  setState(() => _activeBreakPickId = id);
+                                  final name = _breakLabelFor(profile, id);
+                                  if (name == null || current == null) return;
+                                  await store.renameActivity(current.id, name);
+                                },
                         );
                       },
                     ),
@@ -132,9 +187,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 12),
                       _BreakSuggestion(
                         prompt: store.breakPrompt!,
-                        breaks: profile.breaks,
-                        suggested: store.suggestedBreak,
-                        onGo: (breakId) => store.goToBreak(breakWindowId: breakId),
+                        breakLabel: _breakLabelFor(
+                              profile,
+                              onBreak ? selectedBreakId : _nextBreakId(profile),
+                            ) ??
+                            store.suggestedBreak?.label,
+                        onGo: () => store.goToBreak(
+                          breakWindowId: _nextBreakId(profile),
+                        ),
                         onReturn: () => store.returnFromBreak(),
                       ),
                     ],
@@ -240,6 +300,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                     onPressed: () async {
                                       if (isCurrent) {
                                         await store.endCurrent();
+                                      } else if (button.isBreak) {
+                                        await store.startFromButton(
+                                          button,
+                                          breakWindowId: button.breakId ??
+                                              _nextBreakId(profile),
+                                        );
                                       } else {
                                         await store.startFromButton(button);
                                       }
@@ -367,104 +433,27 @@ class _NotificationBanner extends StatelessWidget {
   }
 }
 
-class _BreakSuggestion extends StatefulWidget {
+class _BreakSuggestion extends StatelessWidget {
   const _BreakSuggestion({
     required this.prompt,
-    required this.breaks,
-    required this.suggested,
     required this.onGo,
     required this.onReturn,
+    this.breakLabel,
   });
 
   final BreakPrompt prompt;
-  final List<BreakWindow> breaks;
-  final BreakWindow? suggested;
-  final Future<void> Function(String? breakId) onGo;
+  final String? breakLabel;
+  final VoidCallback onGo;
   final VoidCallback onReturn;
 
   @override
-  State<_BreakSuggestion> createState() => _BreakSuggestionState();
-}
-
-class _BreakSuggestionState extends State<_BreakSuggestion> {
-  String? _selectedId;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedId = widget.suggested?.id;
-  }
-
-  @override
-  void didUpdateWidget(covariant _BreakSuggestion oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.suggested?.id != oldWidget.suggested?.id &&
-        (_selectedId == null ||
-            !widget.breaks.any((b) => b.id == _selectedId))) {
-      _selectedId = widget.suggested?.id;
-    }
-  }
-
-  BreakWindow? get _selected {
-    for (final b in widget.breaks) {
-      if (b.id == _selectedId) return b;
-    }
-    return widget.suggested;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isReturn = widget.prompt == BreakPrompt.returnFromBreak;
-    if (isReturn) {
-      return FilledButton.tonal(
-        onPressed: widget.onReturn,
-        child: const Text('Return from break'),
-      );
-    }
-
-    final selected = _selected;
-    final label = selected == null ? 'Go to break' : 'Go to ${selected.label}';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (widget.breaks.length > 1) ...[
-          DropdownButtonFormField<String>(
-            initialValue: _selectedId ?? widget.breaks.first.id,
-            decoration: const InputDecoration(
-              labelText: 'Break',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-            items: [
-              if (widget.suggested != null)
-                DropdownMenuItem(
-                  value: widget.suggested!.id,
-                  child: Text(
-                    'Next · ${widget.suggested!.label} '
-                    '(${formatMinutesOfDay(widget.suggested!.startMinutes)})',
-                  ),
-                ),
-              ...widget.breaks
-                  .where((b) => b.id != widget.suggested?.id)
-                  .map(
-                    (b) => DropdownMenuItem(
-                      value: b.id,
-                      child: Text(
-                        '${b.label} (${formatMinutesOfDay(b.startMinutes)})',
-                      ),
-                    ),
-                  ),
-            ],
-            onChanged: (v) => setState(() => _selectedId = v),
-          ),
-          const SizedBox(height: 8),
-        ],
-        FilledButton.tonal(
-          onPressed: () => widget.onGo(_selectedId ?? selected?.id),
-          child: Text(label),
-        ),
-      ],
+    final isReturn = prompt == BreakPrompt.returnFromBreak;
+    final goLabel =
+        breakLabel == null ? 'Go to break' : 'Go to $breakLabel';
+    return FilledButton.tonal(
+      onPressed: isReturn ? onReturn : onGo,
+      child: Text(isReturn ? 'Return from break' : goLabel),
     );
   }
 }
@@ -524,12 +513,59 @@ class _ActiveCard extends StatelessWidget {
     required this.dayStarted,
     required this.needsName,
     this.onEditName,
+    this.breakWindows,
+    this.selectedBreakId,
+    this.onSelectBreak,
   });
 
   final ActivityEntry? current;
   final bool dayStarted;
   final bool needsName;
   final VoidCallback? onEditName;
+  final List<BreakWindow>? breakWindows;
+  final String? selectedBreakId;
+  final Future<void> Function(String id)? onSelectBreak;
+
+  bool get _canSwitchBreak =>
+      breakWindows != null &&
+      breakWindows!.length >= 2 &&
+      onSelectBreak != null;
+
+  Future<void> _pickBreak(BuildContext context) async {
+    final windows = breakWindows;
+    final onSelect = onSelectBreak;
+    if (windows == null || onSelect == null) return;
+
+    final box = context.findRenderObject() as RenderBox?;
+    final overlay = Navigator.of(context).overlay?.context.findRenderObject()
+        as RenderBox?;
+    if (box == null || overlay == null) return;
+
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        box.localToGlobal(Offset.zero, ancestor: overlay),
+        box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+
+    final chosen = await showMenu<String>(
+      context: context,
+      position: position,
+      items: windows
+          .map(
+            (b) => PopupMenuItem(
+              value: b.id,
+              child: Text(
+                '${b.label}  ${formatMinutesOfDay(b.startMinutes)}–${formatMinutesOfDay(b.endMinutes)}'
+                '${b.id == selectedBreakId ? '  ✓' : ''}',
+              ),
+            ),
+          )
+          .toList(),
+    );
+    if (chosen != null) await onSelect(chosen);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -543,48 +579,60 @@ class _ActiveCard extends StatelessWidget {
     return Material(
       color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
       borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onEditName,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  if (onEditName != null)
-                    Icon(
-                      Icons.edit_outlined,
-                      size: 18,
-                      color: scheme.onSurface.withValues(alpha: 0.55),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                elapsed,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-              ),
-              if (needsName) ...[
-                const SizedBox(height: 10),
-                Text(
-                  'Tap to add a name',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: scheme.primary,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Builder(
+              builder: (menuContext) {
+                return InkWell(
+                  onTap: _canSwitchBreak
+                      ? () => _pickBreak(menuContext)
+                      : onEditName,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ),
-                ),
-              ],
+                      if (_canSwitchBreak)
+                        Icon(
+                          Icons.arrow_drop_down,
+                          size: 28,
+                          color: scheme.onSurface.withValues(alpha: 0.65),
+                        )
+                      else if (onEditName != null)
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 18,
+                          color: scheme.onSurface.withValues(alpha: 0.55),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 6),
+            Text(
+              elapsed,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+            ),
+            if (needsName) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Tap to add a name',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: scheme.primary,
+                    ),
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );

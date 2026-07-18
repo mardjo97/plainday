@@ -73,6 +73,28 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".PlaindayAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="rs.hexatech.plainday.action.ALARM_FIRE"/>
+                <action android:name="rs.hexatech.plainday.action.ALARM_SNOOZE"/>
+                <action android:name="rs.hexatech.plainday.action.NOTIF_ACTION"/>
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".PlaindayBootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
             <intent-filter>

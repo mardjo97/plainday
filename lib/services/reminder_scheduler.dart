@@ -1,13 +1,21 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../models/profile.dart';
 import 'notification_service.dart';
 
-/// Builds OS schedules from a generic Profile config (no special kinds).
+/// Builds OS schedules from a generic Profile config.
+///
+/// On Android, scheduling is owned by native [PlaindayReminderScheduler]
+/// (AlarmManager) so widget taps and boot survive without Flutter.
 class ReminderScheduler {
   ReminderScheduler(this.notifications);
 
   final NotificationService notifications;
+
+  static const _channel = MethodChannel('rs.hexatech.plainday/reminders');
 
   /// How many interval reminders were scheduled in the last reschedule.
   int lastIntervalCount = 0;
@@ -18,6 +26,10 @@ class ReminderScheduler {
   /// Why scheduling was skipped or limited (null when OK).
   String? lastSkipReason;
 
+  bool lastExactAllowed = true;
+  bool lastUsedInexact = false;
+  int lastScheduledCount = 0;
+
   Future<void> reschedule({
     required Profile? profile,
     required bool dayStarted,
@@ -25,9 +37,12 @@ class ReminderScheduler {
     lastIntervalCount = 0;
     lastIntervalConfigCount = 0;
     lastSkipReason = null;
+    lastExactAllowed = true;
+    lastUsedInexact = false;
+    lastScheduledCount = 0;
     notifications.lastScheduledCount = 0;
 
-    // Always wipe OS schedules first (end day / profile switch rely on this).
+    // Drop any leftover plugin alarms so we don't double-fire.
     await notifications.cancelAll();
 
     if (profile == null) {
@@ -44,9 +59,68 @@ class ReminderScheduler {
         )
         .length;
 
-    // Day off / stopped: stay silent — no intervals, breaks, or end nudges.
-    // (Start-of-day nudges only when the day hasn't been started yet *and*
-    // the profile wants them for an upcoming start time.)
+    if (Platform.isAndroid) {
+      await _rescheduleNative();
+      return;
+    }
+
+    await _rescheduleDart(profile: profile, dayStarted: dayStarted);
+  }
+
+  Future<void> _rescheduleNative() async {
+    try {
+      final raw = await _channel.invokeMethod<dynamic>('reschedule');
+      if (raw is! Map) {
+        lastSkipReason = 'Native reschedule returned nothing';
+        return;
+      }
+      final map = Map<String, dynamic>.from(raw);
+      lastScheduledCount = map['scheduled'] as int? ?? 0;
+      lastIntervalCount = map['intervals'] as int? ?? 0;
+      lastIntervalConfigCount =
+          map['intervalConfigs'] as int? ?? lastIntervalConfigCount;
+      lastSkipReason = map['skipReason'] as String?;
+      lastExactAllowed = map['exactAllowed'] as bool? ?? true;
+      lastUsedInexact = map['usedInexact'] as bool? ?? false;
+      notifications.lastScheduledCount = lastScheduledCount;
+      notifications.lastUsedInexact = lastUsedInexact;
+      notifications.lastScheduleMode =
+          lastUsedInexact ? 'inexactAllowWhileIdle' : 'alarmClock';
+      debugPrint(
+        'Plainday native reminders: scheduled=$lastScheduledCount '
+        'intervals=$lastIntervalCount exact=$lastExactAllowed '
+        'reason=$lastSkipReason',
+      );
+    } catch (e) {
+      lastSkipReason = 'Native reschedule failed: $e';
+      debugPrint('Plainday: $lastSkipReason');
+    }
+  }
+
+  Future<bool> canScheduleExactNative() async {
+    if (!Platform.isAndroid) return notifications.canScheduleExact();
+    try {
+      final v = await _channel.invokeMethod<bool>('canScheduleExact');
+      return v ?? await notifications.canScheduleExact();
+    } catch (_) {
+      return notifications.canScheduleExact();
+    }
+  }
+
+  Future<void> snoozeStandUpNative() async {
+    if (Platform.isAndroid) {
+      try {
+        await _channel.invokeMethod<void>('snoozeStandUp');
+        return;
+      } catch (_) {}
+    }
+    await notifications.scheduleSnoozeStandUp();
+  }
+
+  Future<void> _rescheduleDart({
+    required Profile profile,
+    required bool dayStarted,
+  }) async {
     if (!dayStarted) {
       if (profile.rules.silenceWhenInactive) {
         lastSkipReason = 'Day off — reminders cleared';
@@ -171,8 +245,6 @@ class ReminderScheduler {
 
   Future<void> _scheduleIntervals(Profile profile, DateTime now) async {
     var windowEnd = _onDay(now, profile.endMinutes);
-    // If the profile day is still active past scheduled end (or end is soon),
-    // keep scheduling intervals while the day is running.
     final minWindow = now.add(const Duration(hours: 8));
     if (!windowEnd.isAfter(now.add(const Duration(minutes: 2)))) {
       windowEnd = minWindow;
@@ -183,10 +255,8 @@ class ReminderScheduler {
       final every = r.intervalMinutes;
       if (every == null || every <= 0) continue;
 
-      // First fire after one full interval from now.
       var cursor = now.add(Duration(minutes: every));
       var count = 0;
-      // Short intervals: schedule a dense exact window (alarmClock).
       final maxCount = every <= 2 ? 45 : (every <= 5 ? 24 : 16);
       while (!cursor.isAfter(windowEnd) && count < maxCount) {
         final ok = await notifications.scheduleAt(
