@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/widget_background"
+    android:clickable="true"
+    android:focusable="true">
+
+    <TextView
+        android:id="@+id/widget_profile"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Plainday"
+        android:textStyle="bold"
+        android:textSize="17sp"
+        android:letterSpacing="0.01"
+        android:textColor="#1C1F1E" />
+
+    <TextView
+        android:id="@+id/widget_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Day off"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:textColor="#2F6F5E"
+        android:background="@drawable/widget_btn_secondary"
+        android:paddingLeft="10dp"
+        android:paddingRight="10dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <TextView
+        android:id="@+id/widget_current"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Tap to open"
+        android:textSize="15sp"
+        android:textColor="#1C1F1E"
+        android:layout_marginTop="14dp" />
+
+    <Chronometer
+        android:id="@+id/widget_elapsed"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="--:--"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:textColor="#2F6F5E"
+        android:layout_marginTop="2dp"
+        android:format="%s" />
+
+    <TextView
+        android:id="@+id/widget_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textSize="12sp"
+        android:textColor="#6B7570"
+        android:layout_marginTop="4dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="14dp">
+
+        <TextView
+            android:id="@+id/widget_day_button"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Start day"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/widget_btn_primary"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/widget_name_button"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:gravity="center"
+            android:text="Add name"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/widget_btn_dark"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/widget_open_button"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:gravity="center"
+            android:text="Open"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#1C1F1E"
+            android:background="@drawable/widget_btn_secondary"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:id="@+id/widget_action_0"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Action"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#1C1F1E"
+            android:background="@drawable/widget_btn_action"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp" />
+
+        <TextView
+            android:id="@+id/widget_action_1"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:gravity="center"
+            android:text="Action"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#1C1F1E"
+            android:background="@drawable/widget_btn_action"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:id="@+id/widget_action_2"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Action"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#1C1F1E"
+            android:background="@drawable/widget_btn_action"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp" />
+
+        <TextView
+            android:id="@+id/widget_action_3"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:gravity="center"
+            android:text="Action"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#1C1F1E"
+            android:background="@drawable/widget_btn_action"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp" />
+    </LinearLayout>
+</LinearLayout>
